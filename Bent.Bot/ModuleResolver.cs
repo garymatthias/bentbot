@@ -13,8 +13,10 @@ namespace Bent.Bot
 {
     internal class ModuleResolver
     {
+#pragma warning disable 0649
         [ImportMany(typeof(IModule), AllowRecomposition = true)]
         private IEnumerable<IModule> importedModules;
+#pragma warning restore 0649
         private List<IModule> loadedModules;
         private IReadOnlyList<IModule> readOnlyModules;
         private IEnumerable<string> moduleNames;
