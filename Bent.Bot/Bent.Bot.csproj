@@ -70,6 +70,7 @@
     <Compile Include="Interfaces\IBackend.cs" />
     <Compile Include="Interfaces\IMessage.cs" />
     <Compile Include="ModuleResolver.cs" />
+    <Compile Include="Module\Timer.cs" />
     <Compile Include="Module\LastFm.cs" />
     <Compile Include="Module\Extend.cs" />
     <Compile Include="Module\Google.cs" />
