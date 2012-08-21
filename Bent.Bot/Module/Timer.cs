@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
@@ -16,8 +17,10 @@ namespace Bent.Bot.Module
 
         private static Regex timerRegex = new Regex(@"^\s*timer\s+(.+)\s*$", RegexOptions.IgnoreCase);
         private static Regex fromNowRegex = new Regex(@"^\s*(\-?[0-9\.]+)\s(ticks?|(swatch )?\.?beats?|minutes?|seconds?|hours?)\sfrom\snow\s+say\s+(.+)\s*$", RegexOptions.IgnoreCase);
+        private static Regex deleteRegex = new Regex(@"^\s*delete\s+all\s*$", RegexOptions.IgnoreCase);
 
         private IBackend backend;
+        private ConcurrentDictionary<System.Timers.Timer, bool> activeTimers = new ConcurrentDictionary<System.Timers.Timer, bool>();
 
         public void OnStart(IConfiguration config, IBackend backend)
         {
@@ -41,11 +44,39 @@ namespace Bent.Bot.Module
                     if (TestTimeFromNow(timerBody, out milliseconds, out text))
                     {
                         if (!ValidateTime(message.ReplyTo, milliseconds)) return;
-                        CreateTimer(message.ReplyTo, milliseconds, text);
+                        AddTimer(message.ReplyTo, milliseconds, text);
                         this.backend.SendMessageAsync(message.ReplyTo, "Sure!");
+                    }
+                    else if (TestDelete(timerBody))
+                    {
+                        if (activeTimers.Keys.Any())
+                        {
+                            foreach (System.Timers.Timer t in activeTimers.Keys)
+                            {
+                                RemoveAndDisposeTimer(t);
+                            }
+                            this.backend.SendMessageAsync(message.ReplyTo, "All timers deleted!");
+                        }
+                        else
+                        {
+                            this.backend.SendMessageAsync(message.ReplyTo, "No timers to delete.");
+                        }
                     }
                 }
             }
+        }
+
+        private void AddTimer(IAddress replyTo, double milliseconds, string text)
+        {
+            activeTimers.AddOrUpdate(CreateTimer(replyTo, milliseconds, text), (x) => { return true; }, (x,y) => { return true; });
+        }
+
+        private void RemoveAndDisposeTimer(System.Timers.Timer t)
+        {
+            bool value;
+            activeTimers.TryRemove(t, out value);
+            t.Enabled = false;
+            t.Dispose();
         }
 
         private System.Timers.Timer CreateTimer(IAddress replyTo, double milliseconds, string text)
@@ -116,13 +147,16 @@ namespace Bent.Bot.Module
             return false;
         }
 
+        private bool TestDelete(string timerBody)
+        {
+            return deleteRegex.Match(timerBody).Success;
+        }
+
         private System.Timers.ElapsedEventHandler GetElapsedEvent(System.Timers.Timer t,  IAddress replyTo, string text)
         {
             return (o, e) =>
             {
-                t.Enabled = false;
-                t.Dispose();
-
+                RemoveAndDisposeTimer(t);
                 this.backend.SendMessageAsync(replyTo, text);
             };
         }
