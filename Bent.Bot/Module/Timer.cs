@@ -15,7 +15,7 @@ namespace Bent.Bot.Module
         // TODO: Allow user to specify exact time
 
         private static Regex timerRegex = new Regex(@"^\s*timer\s+(.+)\s*$", RegexOptions.IgnoreCase);
-        private static Regex fromNowRegex = new Regex(@"^\s*(\-?[0-9\.]+)\s(minutes?|seconds?|hours?)\sfrom\snow\s+say\s+(.+)\s*$", RegexOptions.IgnoreCase);
+        private static Regex fromNowRegex = new Regex(@"^\s*(\-?[0-9\.]+)\s(ticks?|(swatch )?\.?beats?|minutes?|seconds?|hours?)\sfrom\snow\s+say\s+(.+)\s*$", RegexOptions.IgnoreCase);
 
         private IBackend backend;
 
@@ -87,7 +87,7 @@ namespace Bent.Bot.Module
                 double num = 0;
                 double.TryParse(match.Groups[1].Value, out num);
                 
-                text = match.Groups[3].Value;
+                text = match.Groups[4].Value;
 
                 var units = match.Groups[2].Value;
                 if (units.StartsWith("second"))
@@ -101,6 +101,14 @@ namespace Bent.Bot.Module
                 else if (units.StartsWith("hour"))
                 {
                     milliseconds = num * 60 * 60 * 1000;
+                }
+                else if (units.StartsWith("tick"))
+                {
+                    milliseconds = num / TimeSpan.TicksPerMillisecond;
+                }
+                else if (units.Contains("beat"))
+                {
+                    milliseconds = num * 86.4 * 1000;
                 }
 
                 return true;
