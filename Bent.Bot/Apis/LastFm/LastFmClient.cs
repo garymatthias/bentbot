@@ -21,6 +21,16 @@ namespace Bent.Bot.Apis.LastFm
             this.serviceUrl = url + "?api_key=" + apiKey;
         }
 
+        public async Task<XDocument> GetHypedTracksAsync()
+        {
+            return await QueryGlobalAsync(LastFmMethod.Chart_GetHypedTracks);
+        }
+
+        public async Task<XDocument> GetTopTracksAsync()
+        {
+            return await QueryGlobalAsync(LastFmMethod.Chart_GetTopTracks);
+        }
+
         public async Task<XDocument> GetArtistInfoAsync(string artist)
         {
             return await QueryArtistAsync(LastFmMethod.Artist_GetInfo, artist);
@@ -50,6 +60,11 @@ namespace Bent.Bot.Apis.LastFm
                 { "artist", artist }, { "track", track }
             };
             return await QueryAsync(GenerateUrl(method, query));
+        }
+
+        private async Task<XDocument> QueryGlobalAsync(LastFmMethod method)
+        {
+            return await QueryAsync(GenerateUrl(method, new Dictionary<string, string>()));
         }
 
         public async Task<XDocument> QueryAsync(string url)

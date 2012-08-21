@@ -24,6 +24,8 @@ namespace Bent.Bot.Module
         private static Regex similarArtistRegex = new Regex(@"^\s*similar\s+to\s+(.+)\s*$", RegexOptions.IgnoreCase);
         private static Regex discoveryChainArtistRegex = new Regex(@"^\s*discovery\s+(.+)\s*$", RegexOptions.IgnoreCase);
         private static Regex discoveryChainTrackRegex = new Regex(@"^\s*discovery\s+""(.+)""\s+by\s+(.+)\s*$", RegexOptions.IgnoreCase);
+        private static Regex hypedTracksRegex = new Regex(@"^\s*hyped\s+tracks\s*$", RegexOptions.IgnoreCase);
+        private static Regex topTracksRegex = new Regex(@"^\s*top\s+tracks\s*$", RegexOptions.IgnoreCase);
         private static Regex helpRegex = new Regex(@"^\s*help\s*$", RegexOptions.IgnoreCase);
 
         #endregion
@@ -66,6 +68,8 @@ namespace Bent.Bot.Module
                         if (await TestSimilarArtists (message, musicBody)) return;
                         if (await TestTrackDiscovery (message, musicBody)) return;
                         if (await TestArtistDiscovery(message, musicBody)) return;
+                        if (await TestHypedTracks    (message, musicBody)) return;
+                        if (await TestTopTracks      (message, musicBody)) return;
                         if (await TestHelp           (message, musicBody)) return;
                     }
                 }
@@ -132,6 +136,28 @@ namespace Bent.Bot.Module
             return false;
         }
 
+        private async Task<bool> TestHypedTracks(IMessage message, string body)
+        {
+            if (hypedTracksRegex.Match(body).Success)
+            {
+                XDocument xml = await new LastFmClient(this.config[Common.Constants.ConfigKey.LastFmApiKey]).GetHypedTracksAsync();
+                await backend.SendMessageAsync(message.ReplyTo, LastFmResponse.CreateHypedTracksResponse(xml));
+                return true;
+            }
+            return false;
+        }
+
+        private async Task<bool> TestTopTracks(IMessage message, string body)
+        {
+            if (topTracksRegex.Match(body).Success)
+            {
+                XDocument xml = await new LastFmClient(this.config[Common.Constants.ConfigKey.LastFmApiKey]).GetTopTracksAsync();
+                await backend.SendMessageAsync(message.ReplyTo, LastFmResponse.CreateTopTracksResponse(xml));
+                return true;
+            }
+            return false;
+        }
+
         private async Task<bool> TestHelp(IMessage message, string body)
         {
             var helpMatch = helpRegex.Match(body);
@@ -157,7 +183,7 @@ namespace Bent.Bot.Module
             for (int i = 0; i < iterations; i++)
             {
                 XDocument xml = await new LastFmClient(this.config[Common.Constants.ConfigKey.LastFmApiKey]).GetSimilarTracksAsync(originalTrackName.Artist, originalTrackName.TrackName);
-                List<Track> similar = LastFmXmlParser.GetSimilarTrackNames(xml, out originalTrackName, true, 1);
+                List<Track> similar = LastFmXmlParser.GetSimilarTracks(xml, out originalTrackName, true, 1);
 
                 if (i == 0)
                 {
@@ -265,7 +291,7 @@ namespace Bent.Bot.Module
                 return names;
             }
 
-            public static List<Track> GetSimilarTrackNames(XDocument xml, out Track originalTrackName, bool isRandomized = false, int limit = 25)
+            public static List<Track> GetSimilarTracks(XDocument xml, out Track originalTrackName, bool isRandomized = false, int limit = 25)
             {
                 Debug.Assert(limit > 0);
 
@@ -275,6 +301,11 @@ namespace Bent.Bot.Module
                     similarTracksElement.Attribute("track").Value
                 );
 
+                return GetTracks(xml, isRandomized, limit);
+            }
+
+            public static List<Track> GetTracks(XDocument xml, bool isRandomized = true, int limit = 10)
+            {
                 var r = new Random();
                 var tracks = new List<Track>();
                 foreach (var item in xml.Descendants("track").OrderBy(x => isRandomized ? r.Next() : 0).Take(limit))
@@ -309,7 +340,7 @@ namespace Bent.Bot.Module
             public static string CreateSimilarTracksResponse(XDocument xml, bool isRandomized = false, int limit = 25)
             {
                 Track originalTrack;
-                List<Track> similarTrackNames = LastFmXmlParser.GetSimilarTrackNames(xml, out originalTrack, isRandomized, limit);
+                List<Track> similarTrackNames = LastFmXmlParser.GetSimilarTracks(xml, out originalTrack, isRandomized, limit);
 
                 var response = new StringBuilder();
                 response
@@ -317,6 +348,30 @@ namespace Bent.Bot.Module
                     .Append(originalTrack)
                     .Append(":\r\n")
                     .Append(String.Join("\r\n", similarTrackNames));
+
+                return response.ToString();
+            }
+
+            public static string CreateHypedTracksResponse(XDocument xml, bool isRandomized = false, int limit = 25)
+            {
+                List<Track> trackNames = LastFmXmlParser.GetTracks(xml, isRandomized, limit);
+
+                var response = new StringBuilder();
+                response
+                    .Append("Hyped tracks:\r\n")
+                    .Append(String.Join("\r\n", trackNames));
+
+                return response.ToString();
+            }
+
+            public static string CreateTopTracksResponse(XDocument xml, bool isRandomized = false, int limit = 25)
+            {
+                List<Track> trackNames = LastFmXmlParser.GetTracks(xml, isRandomized, limit);
+
+                var response = new StringBuilder();
+                response
+                    .Append("Top tracks:\r\n")
+                    .Append(String.Join("\r\n", trackNames));
 
                 return response.ToString();
             }
@@ -340,6 +395,12 @@ namespace Bent.Bot.Module
                 response.AppendLine();
                 response.AppendLine(botName + " music discovery \"Ice Ice Baby\" by Vanilla Ice");
                 response.AppendLine("    Returns a discovery chain of songs, beginning with \"Ice Ice Baby\" by Vanilla Ice.");
+                response.AppendLine();
+                response.AppendLine(botName + " music top tracks");
+                response.AppendLine("    Returns the most popular songs on Last.fm.");
+                response.AppendLine();
+                response.AppendLine(botName + " music hyped tracks");
+                response.AppendLine("    Returns the fastest rising songs on Last.fm.");
                 response.AppendLine();
                 response.AppendLine();
                 response.AppendLine("More cool features coming soon!");
